@@ -25,6 +25,8 @@
 #' @param coords Character vector of X coordinate and Y coordinate column names
 #' @param timegroup timegroup field in the DT upon which the grouping will be calculated
 #' @param splitBy (optional) character string or vector of grouping column name(s) upon which the grouping will be calculated
+#' @param lonlat boolean indiciating if coordinates are unprojected
+#' @param lonlatMeasure character of "haversine" "vincenty", "geodesic", or "cheap", specifying the method of distance calculation. Ignored if lonlat is FALSE. See \code{\link[geodist:geodist]{geodist::geodist}} for details.
 #'
 #' @export
 #'
@@ -43,6 +45,7 @@
 #'
 #' # Temporal grouping
 #' group_times(DT, datetime = 'datetime', threshold = '20 minutes')
+#'
 #' # Spatial grouping with timegroup
 #' group_pts(DT, threshold = 5, id = 'ID',
 #'           coords = c('X', 'Y'), timegroup = 'timegroup')
@@ -55,7 +58,9 @@ group_pts <- function(DT = NULL,
                      id = NULL,
                      coords = NULL,
                      timegroup,
-                     splitBy = NULL) {
+                     splitBy = NULL,
+                     lonlat = FALSE,
+                     lonlatMeasure = 'geodesic') {
   # due to NSE notes in R CMD check
   N <- withinGroup <- ..id <- ..coords <- group <- NULL
 
@@ -140,11 +145,21 @@ group_pts <- function(DT = NULL,
   }
 
   DT[, withinGroup := {
-    distMatrix <-
-      as.matrix(stats::dist(cbind(
+    if (lonlat) {
+      xy <- cbind(
         get(..coords[1]), get(..coords[2])
-      ),
-      method = 'euclidean'))
+      )
+      names(xy) <- c('x', 'y')
+    distMatrix <-
+      geodist::geodist(xy,
+      measure = lonlatMeasure)
+    } else {
+      distMatrix <-
+        as.matrix(stats::dist(cbind(
+          get(..coords[1]), get(..coords[2])
+        ),
+        method = 'euclidean'))
+    }
     graphAdj <-
       igraph::graph_from_adjacency_matrix(distMatrix <= threshold)
     igraph::clusters(graphAdj)$membership
